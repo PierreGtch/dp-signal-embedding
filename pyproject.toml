@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "dp-signal-embedding"
+version = "0.1.0"
+description = "Dareplane module for transforming an LSL stream into a stream of embedding vectors."
+authors = ["Pierre Guetschel <pierre.guetschel@donders.ru.nl>"]
+license = "MIT"
+readme = "README.md"
+packages = [{ include = "signal_embedding" }]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+dareplane-utils = "^0.0.7"
+jsonargparse = "^4.29.0"
+numpy = "^1.26.4"
+pylsl = "^1.16.2"
+scipy = "^1.13.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
