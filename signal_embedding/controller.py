@@ -1,8 +1,6 @@
-from typing import Protocol, runtime_checkable
 import threading
 
 import numpy as np
-from numpy.typing import NDArray
 import pylsl
 from scipy.signal import resample
 
@@ -11,23 +9,7 @@ from dareplane_utils.signal_processing.filtering import FilterBank
 from dareplane_utils.stream_watcher.lsl_stream_watcher import StreamWatcher
 
 from signal_embedding.utils.logging import logger
-
-
-@runtime_checkable
-class SklearnTransformer(Protocol):
-    def transform(self, X: NDArray[np.float32]) -> NDArray[np.float32]:
-        pass
-
-
-@runtime_checkable
-class ModelGetter(Protocol):
-    def __call__(
-            self,
-            sfreq: float,
-            input_window_seconds: float,
-            chs_info: list[dict],
-    ) -> SklearnTransformer:
-        pass
+from signal_embedding.models.base import ModelGetter
 
 
 class SignalEmbedder:

@@ -1,5 +1,7 @@
 import numpy as np
 
+from signal_embedding.models.base import ModelGetter
+
 
 def jumping_means(X, intervals_samples: list[tuple[int, int]]):
     """Calculate the mean of the signal in the intervals.
@@ -25,7 +27,7 @@ def jumping_means(X, intervals_samples: list[tuple[int, int]]):
     return means
 
 
-class JumpingMeansTransformer:
+class JumpingMeansTransformer(ModelGetter):
     def __init__(self, intervals_seconds: list[tuple[float, float]]):
         self.intervals_seconds = intervals_seconds
 
