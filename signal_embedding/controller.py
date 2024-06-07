@@ -89,6 +89,7 @@ class SignalEmbedder:
         ]
 
     def connect_input_stream(self):
+        logger.info(f"Connecting to input stream {self.input_stream_name}")
         self.inlet = StreamWatcher(
             self.input_stream_name, buffer_size_s=self.buffer_size_s, logger=logger)
 
@@ -102,6 +103,7 @@ class SignalEmbedder:
         return 0
 
     def create_model(self):
+        logger.info("Creating the model and the filter bank.")
         self.fb = FilterBank(
             bands={"band": self.band},
             sfreq=self.signal_sfreq,
@@ -118,6 +120,7 @@ class SignalEmbedder:
         return 0
 
     def create_output_stream(self):
+        logger.info(f"Creating the output stream {self.output_stream_name}")
         info = pylsl.StreamInfo(
             self.output_stream_name, "MISC", channel_count=self.n_outputs,
             nominal_srate=pylsl.IRREGULAR_RATE, channel_format="float32",
@@ -130,6 +133,7 @@ class SignalEmbedder:
         # Grab latest samples
         self.inlet.update()
 
+        logger.debug(f"Filtering {self.inlet.n_new} new samples")
         # Filter the data
         self.fb.filter(
             # look back only new data
@@ -141,6 +145,7 @@ class SignalEmbedder:
 
         # Most recent samples
         n_times = int(self.input_window_seconds * self.signal_sfreq)
+        logger.debug(f"Loading the {n_times} latest samples")
         # FilterBank returns (n_times, n_channel, n_bands)
         x = self.fb.get_data()[-n_times:, :, 0]
 
