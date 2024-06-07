@@ -17,9 +17,11 @@ def jumping_means(X, intervals_samples: list[tuple[int, int]]):
         Array with the means of the signal in the intervals.
     """
     assert X.ndim == 3
-    means = np.stack([np.mean(X[:, :, start:end], axis=1)
-                      for start, end in intervals_samples],
-                     axis=1)
+    means = np.concatenate(
+        [np.mean(X[:, :, start:end], axis=-1)
+         for start, end in intervals_samples],
+        axis=-1,
+    )
     return means
 
 
