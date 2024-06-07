@@ -196,7 +196,3 @@ class SignalEmbedder:
         )
         thread.start()
         return thread, stop_event
-
-    def stop(self):
-        # TODO
-        return 0

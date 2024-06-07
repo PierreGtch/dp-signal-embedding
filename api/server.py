@@ -14,7 +14,7 @@ def main(port: int = 8080, ip: str = "127.0.0.1", loglevel: int = 10):
 
     pcommand_map = {
         "RUN": controler.run,  # update at regular intervals
-        "STOP": controler.stop,  # stop updates
+        # "STOP": controler.stop,  # stop updates -> command automatically created by dareplane-utils
         "UPDATE": controler.update,  # update once only
     }
 
