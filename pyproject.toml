@@ -8,13 +8,21 @@ readme = "README.md"
 packages = [{ include = "signal_embedding" }]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = ">=3.10,<3.13"
 dareplane-utils = "^0.0.7"
 jsonargparse = "^4.29.0"
 numpy = "^1.26.4"
 pylsl = "^1.16.2"
 scipy = "^1.13.1"
+braindecode = "^0.8.1"
+scikit-learn = "^1.5.0"
+skorch = "^1.0.0"
+einops = "^0.8.0"
+huggingface-hub = "^0.23.3"
 
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2.2"
 
 [build-system]
 requires = ["poetry-core"]

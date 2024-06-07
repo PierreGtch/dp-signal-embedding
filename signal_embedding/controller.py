@@ -1,8 +1,6 @@
-from typing import Protocol, runtime_checkable
 import threading
 
 import numpy as np
-from numpy.typing import NDArray
 import pylsl
 from scipy.signal import resample
 
@@ -11,23 +9,7 @@ from dareplane_utils.signal_processing.filtering import FilterBank
 from dareplane_utils.stream_watcher.lsl_stream_watcher import StreamWatcher
 
 from signal_embedding.utils.logging import logger
-
-
-@runtime_checkable
-class SklearnTransformer(Protocol):
-    def transform(self, X: NDArray[np.float32]) -> NDArray[np.float32]:
-        pass
-
-
-@runtime_checkable
-class ModelGetter(Protocol):
-    def __call__(
-            self,
-            sfreq: float,
-            input_window_seconds: float,
-            chs_info: list[dict],
-    ) -> SklearnTransformer:
-        pass
+from signal_embedding.models.base import ModelGetter
 
 
 class SignalEmbedder:
@@ -107,6 +89,7 @@ class SignalEmbedder:
         ]
 
     def connect_input_stream(self):
+        logger.info(f"Connecting to input stream {self.input_stream_name}")
         self.inlet = StreamWatcher(
             self.input_stream_name, buffer_size_s=self.buffer_size_s, logger=logger)
 
@@ -120,6 +103,7 @@ class SignalEmbedder:
         return 0
 
     def create_model(self):
+        logger.info("Creating the model and the filter bank.")
         self.fb = FilterBank(
             bands={"band": self.band},
             sfreq=self.signal_sfreq,
@@ -136,6 +120,7 @@ class SignalEmbedder:
         return 0
 
     def create_output_stream(self):
+        logger.info(f"Creating the output stream {self.output_stream_name}")
         info = pylsl.StreamInfo(
             self.output_stream_name, "MISC", channel_count=self.n_outputs,
             nominal_srate=pylsl.IRREGULAR_RATE, channel_format="float32",
@@ -148,6 +133,7 @@ class SignalEmbedder:
         # Grab latest samples
         self.inlet.update()
 
+        logger.debug(f"Filtering {self.inlet.n_new} new samples")
         # Filter the data
         self.fb.filter(
             # look back only new data
@@ -159,6 +145,7 @@ class SignalEmbedder:
 
         # Most recent samples
         n_times = int(self.input_window_seconds * self.signal_sfreq)
+        logger.debug(f"Loading the {n_times} latest samples")
         # FilterBank returns (n_times, n_channel, n_bands)
         x = self.fb.get_data()[-n_times:, :, 0]
 

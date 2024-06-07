@@ -1,4 +1,7 @@
 import numpy as np
+from sklearn.preprocessing import FunctionTransformer
+
+from signal_embedding.models.base import ModelGetter
 
 
 def jumping_means(X, intervals_samples: list[tuple[int, int]]):
@@ -17,13 +20,15 @@ def jumping_means(X, intervals_samples: list[tuple[int, int]]):
         Array with the means of the signal in the intervals.
     """
     assert X.ndim == 3
-    means = np.stack([np.mean(X[:, :, start:end], axis=1)
-                      for start, end in intervals_samples],
-                     axis=1)
+    means = np.concatenate(
+        [np.mean(X[:, :, start:end], axis=-1)
+         for start, end in intervals_samples],
+        axis=-1,
+    )
     return means
 
 
-class JumpingMeansTransformer:
+class JumpingMeansTransformer(ModelGetter):
     def __init__(self, intervals_seconds: list[tuple[float, float]]):
         self.intervals_seconds = intervals_seconds
 
@@ -33,8 +38,6 @@ class JumpingMeansTransformer:
             input_window_seconds: float,
             chs_info: list[dict],
     ):
-        # soft dependency to sklearn
-        from sklearn.preprocessing import FunctionTransformer
         intervals_samples = [(int(start * sfreq), int(end * sfreq))
                              for start, end in self.intervals_seconds]
         assert all(
