@@ -1,4 +1,5 @@
 from typing import Protocol, runtime_checkable
+import threading
 
 import numpy as np
 from numpy.typing import NDArray
@@ -176,11 +177,8 @@ class SignalEmbedder:
         self.outlet.push_sample(y)
         return 0
 
-    def run(self):
-        if self._running:
-            return "Already running"
-        self._running = True
-        while self._running:
+    def _run_loop(self, stop_event: threading.Event):
+        while not stop_event.is_set():
             t_start = pylsl.local_clock()
             if self.inlet.n_new > 1:
                 self.update()
@@ -190,6 +188,15 @@ class SignalEmbedder:
             sleep_s(self.t_sleep - (t_end - t_start))
         return 0
 
+    def run(self) -> tuple[threading.Thread, threading.Event]:
+        stop_event = threading.Event()
+        thread = threading.Thread(
+            target=self._run_loop,
+            kwargs={"stop_event": stop_event},
+        )
+        thread.start()
+        return thread, stop_event
+
     def stop(self):
-        self._running = False
+        # TODO
         return 0
