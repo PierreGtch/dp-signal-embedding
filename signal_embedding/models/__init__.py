@@ -1,1 +1,2 @@
 from signal_embedding.models.jumping_means import JumpingMeansTransformer
+from signal_embedding.models.skorch_nn import SkorchTransformer
