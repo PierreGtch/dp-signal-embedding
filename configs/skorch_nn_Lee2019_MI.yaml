@@ -1,0 +1,11 @@
+model_getter:
+  class_path: signal_embedding.models.SkorchTransformer
+  init_args:
+    hf_repo_id: 'PierreGtch/EEGNetv4'
+    hf_model_name: 'EEGNetv4_Lee2019_MI'
+input_stream_name: "AODataStream"
+output_stream_name: "embedding"
+input_window_seconds: 3
+new_sfreq: 128
+band: [ 0.5, 40 ]
+t_sleep: 0.0
