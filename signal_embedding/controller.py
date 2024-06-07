@@ -125,7 +125,7 @@ class SignalEmbedder:
         info = pylsl.StreamInfo(
             self.output_stream_name, "MISC", channel_count=self.n_outputs,
             nominal_srate=pylsl.IRREGULAR_RATE, channel_format="float32",
-            source_id=str(self.model),
+            source_id="signal_embedding",  # TODO should it be more unique?
         )
         self.outlet = pylsl.StreamOutlet(info)
         return 0
