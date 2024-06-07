@@ -84,7 +84,7 @@ class SkorchTransformer(ModelGetter):
             repo_id=self.hf_repo_id,
             filename=f'{self.hf_model_name}/model-params.pkl',
         )
-        torch_module = module_cls(**module_kwargs)
+        torch_module = module_cls(**module_kwargs).float()
         torch_module.eval()
         torch_module.load_state_dict(torch.load(path_params, map_location='cpu'))
 

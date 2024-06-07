@@ -75,7 +75,8 @@ class SignalEmbedder:
 
     @property
     def n_outputs(self):
-        x = np.zeros((1, len(self.chs_info), int(self.input_window_seconds * self.model_sfreq)))
+        x = np.zeros((1, len(self.chs_info), int(self.input_window_seconds * self.model_sfreq)),
+                     dtype=np.float32)
         y = self.model.transform(x)
         assert y.ndim == 2
         assert y.shape[0] == 1
