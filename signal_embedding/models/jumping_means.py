@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.preprocessing import FunctionTransformer
 
 from signal_embedding.models.base import ModelGetter
 
@@ -37,8 +38,6 @@ class JumpingMeansTransformer(ModelGetter):
             input_window_seconds: float,
             chs_info: list[dict],
     ):
-        # soft dependency to sklearn
-        from sklearn.preprocessing import FunctionTransformer
         intervals_samples = [(int(start * sfreq), int(end * sfreq))
                              for start, end in self.intervals_seconds]
         assert all(
