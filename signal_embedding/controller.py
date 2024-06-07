@@ -130,6 +130,7 @@ class SignalEmbedder:
         return 0
 
     def update(self):
+        logger.debug(f"Start update")
         # Grab latest samples
         self.inlet.update()
 
