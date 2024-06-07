@@ -133,6 +133,9 @@ class SignalEmbedder:
         logger.debug(f"Start update")
         # Grab latest samples
         self.inlet.update()
+        if self.inlet.n_new == 0:
+            logger.debug("Skipping filtering because no new samples")
+            return 0
 
         logger.debug(f"Filtering {self.inlet.n_new} new samples")
         # Filter the data
@@ -145,10 +148,16 @@ class SignalEmbedder:
         self.inlet.n_new = 0
 
         # Most recent samples
-        n_times = int(self.input_window_seconds * self.signal_sfreq)
-        logger.debug(f"Loading the {n_times} latest samples")
+        logger.debug(f"Loading the latest samples")
         # FilterBank returns (n_times, n_channel, n_bands)
-        x = self.fb.get_data()[-n_times:, :, 0]
+        x = self.fb.get_data()
+        n_times = int(self.input_window_seconds * self.signal_sfreq)
+        if x.shape[0] < n_times:
+            logger.debug(
+                f"Skipping embedding because not enough samples in buffer ({x.shape[0]}/{n_times})")
+            return 0
+        logger.debug(f"Embedding the {n_times} latest samples")
+        x = x[-n_times:, :, 0]
 
         # Resample if necessary
         if self.new_sfreq is not None:
@@ -156,20 +165,22 @@ class SignalEmbedder:
             x = resample(x, new_n_times, axis=0)
 
         # Transpose and add batch dim
-        x = x.T.unsqueeze(0)[None, :, :]  # (1, n_channel, n_times)
+        x = x.T[None, :, :]  # (1, n_channel, n_times)
 
         # Compute the embedding
         y = self.model.transform(x)
+        assert y.ndim == 2
+        assert y.shape[0] == 1
 
         # Push the embedding
-        self.outlet.push_sample(y)
+        self.outlet.push_sample(y[0])
         return 0
 
     def _run_loop(self, stop_event: threading.Event):
+        logger.debug("Starting the run loop")
         while not stop_event.is_set():
             t_start = pylsl.local_clock()
-            if self.inlet.n_new > 1:
-                self.update()
+            self.update()
             t_end = pylsl.local_clock()
 
             # reduce sleep by processing time
