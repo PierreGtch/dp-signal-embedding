@@ -5,10 +5,8 @@ from jsonargparse import CLI
 from signal_embedding.controller import SignalEmbedder
 
 config_dir = (Path(__file__).parent / "../configs").resolve()
-config_file = "skorch_nn_Lee2019_MI.yaml"
-
-
-# config_file = "jumping_means.yaml"
+# config_file = "skorch_nn_Lee2019_MI.yaml"
+config_file = "jumping_means.yaml"
 
 
 def cli_signal_embedding() -> SignalEmbedder:
