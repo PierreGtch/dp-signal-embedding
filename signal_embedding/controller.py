@@ -57,10 +57,6 @@ class SignalEmbedder:
         self.fb = None
         self.outlet = None
 
-        self.connect_input_stream()
-        self.create_model()
-        self.create_output_stream()
-
     def get_self(self):
         return self
 
@@ -128,6 +124,12 @@ class SignalEmbedder:
             source_id="signal_embedding",  # TODO should it be more unique?
         )
         self.outlet = pylsl.StreamOutlet(info)
+        return 0
+
+    def init_all(self):
+        self.connect_input_stream()
+        self.create_model()
+        self.create_output_stream()
         return 0
 
     def update(self):
