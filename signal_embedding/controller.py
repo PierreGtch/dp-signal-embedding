@@ -132,6 +132,9 @@ class SignalEmbedder:
 
     def update(self):
         logger.debug(f"Start update")
+        if self.inlet is None or self.outlet is None or self.model is None:
+            logger.error("SignalEmbedder not initialized, call init_all first")
+            return 1
         # Grab latest samples
         self.inlet.update()
         if self.inlet.n_new == 0:
@@ -179,6 +182,9 @@ class SignalEmbedder:
 
     def _run_loop(self, stop_event: threading.Event):
         logger.debug("Starting the run loop")
+        if self.inlet is None or self.outlet is None or self.model is None:
+            logger.error("SignalEmbedder not initialized, call init_all first")
+            return 1
         while not stop_event.is_set():
             t_start = pylsl.local_clock()
             self.update()
