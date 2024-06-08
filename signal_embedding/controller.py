@@ -51,11 +51,12 @@ class SignalEmbedder:
         self.band = band
         self.t_sleep = t_sleep
 
-        self._running = False
         self.model = None
         self.inlet = None
         self.fb = None
         self.outlet = None
+        self.signal_sfreq = None
+        self.chs_info = None
 
     def get_self(self):
         return self
