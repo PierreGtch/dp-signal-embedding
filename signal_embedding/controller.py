@@ -92,9 +92,6 @@ class SignalEmbedder:
 
         self.inlet.connect_to_stream()
 
-        # Grab latest samples
-        self.inlet.update()
-
         # set signal_sfreq and chs_info
         self.set_signal_info()
         return 0
