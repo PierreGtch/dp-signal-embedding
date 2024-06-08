@@ -1,21 +1,25 @@
+from pathlib import Path
+
 from jsonargparse import CLI
 
 from dareplane_utils.default_server.server import DefaultServer
 
-from signal_embedding.main import init_signal_embedding
 from signal_embedding.utils.logging import logger
+from signal_embedding.controller import SignalEmbedder
 
 
-def main(port: int = 8080, ip: str = "127.0.0.1", loglevel: int = 10):
+def main(signal_embedder: SignalEmbedder, port: int = 8080, ip: str = "127.0.0.1",
+         loglevel: int = 10):
     logger.setLevel(loglevel)
 
-    # Get the communication manager
-    controler = init_signal_embedding()
-
     pcommand_map = {
-        "RUN": controler.run,  # update at regular intervals
+        "RUN": signal_embedder.run,  # update at regular intervals
         # "STOP": controler.stop,  # stop updates -> command automatically created by dareplane-utils
-        "UPDATE": controler.update,  # update once only
+        "UPDATE": signal_embedder.update,  # update once only
+        "INIT_ALL": signal_embedder.init_all,  # initialize the streams and the model
+        "CONNECT_INPUT_STREAM": signal_embedder.connect_input_stream,
+        "CREATE_MODEL": signal_embedder.create_model,
+        "CREATE_OUTPUT_STREAM": signal_embedder.create_output_stream,
     }
 
     server = DefaultServer(
@@ -31,4 +35,9 @@ def main(port: int = 8080, ip: str = "127.0.0.1", loglevel: int = 10):
 
 
 if __name__ == "__main__":
-    CLI(main)
+    config_dir = (Path(__file__).parent / "../configs").resolve()
+    # config_file = "skorch_nn_Lee2019_MI.yaml"
+
+    config_file = "jumping_means.yaml"
+
+    CLI(main, default_config_files=[config_dir / config_file])

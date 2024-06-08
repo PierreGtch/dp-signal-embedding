@@ -11,10 +11,11 @@ config_file = "skorch_nn_Lee2019_MI.yaml"
 # config_file = "jumping_means.yaml"
 
 
-def init_signal_embedding(
-        config_path: Path | str = config_dir / config_file,
-) -> SignalEmbedder:
-    return CLI(SignalEmbedder, args=[f'--config={config_path}', 'get_self'], as_positional=False)
+def cli_signal_embedding() -> SignalEmbedder:
+    def aux(signal_embedder: SignalEmbedder):
+        return signal_embedder
+
+    return CLI(aux, default_config_files=[config_dir / config_file])
 
 
 def mockup_stream(stop_event):
@@ -48,11 +49,13 @@ if __name__ == "__main__":
 
     logger.setLevel("DEBUG")
 
+    embedder = cli_signal_embedding()
+
     mockup_event = threading.Event()
     mockup_thread = threading.Thread(target=mockup_stream, kwargs=dict(stop_event=mockup_event))
     mockup_thread.start()
 
-    embedder = init_signal_embedding()
+    embedder.init_all()
     embeder_thread, embedder_event = embedder.run()
 
     time.sleep(5)
