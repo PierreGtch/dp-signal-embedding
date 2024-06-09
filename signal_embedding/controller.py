@@ -1,6 +1,7 @@
 import threading
 
 import numpy as np
+from numpy.typing import NDArray
 import pylsl
 from scipy.signal import resample
 
@@ -130,26 +131,11 @@ class SignalEmbedder:
         self.create_output_stream()
         return 0
 
-    def update(self):
-        logger.debug(f"Start update")
-        if self.inlet is None or self.outlet is None or self.model is None:
-            logger.error("SignalEmbedder not initialized, call init_all first")
-            return 1
-        # Grab latest samples
-        self.inlet.update()
-        if self.inlet.n_new == 0:
-            logger.debug("Skipping filtering because no new samples")
-            return 0
+    def update_latest(self):
+        logger.debug(f"Start update latest")
 
-        logger.debug(f"Filtering {self.inlet.n_new} new samples")
-        # Filter the data
-        self.fb.filter(
-            # look back only new data
-            self.inlet.unfold_buffer()[-self.inlet.n_new:, :],
-            # and this is getting the times
-            self.inlet.unfold_buffer_t()[-self.inlet.n_new:],
-        )  # after this step, the buffer within fb has the filtered data
-        self.inlet.n_new = 0
+        if self._filter():
+            return 1
 
         # Most recent samples
         logger.debug(f"Loading the latest samples")
@@ -160,24 +146,51 @@ class SignalEmbedder:
             logger.debug(
                 f"Skipping embedding because not enough samples in buffer ({x.shape[0]}/{n_times})")
             return 0
-        logger.debug(f"Embedding the {n_times} latest samples")
+        logger.debug(f"Selecting the {n_times} latest samples")
         x = x[-n_times:, :, 0]
-
-        # Resample if necessary
-        if self.new_sfreq is not None:
-            new_n_times = int(self.input_window_seconds * self.new_sfreq)
-            x = resample(x, new_n_times, axis=0)
 
         # Transpose and add batch dim
         x = x.T[None, :, :]  # (1, n_channel, n_times)
 
-        # Compute the embedding
+        return self._project(x)
+
+    def _filter(self):
+        if self.inlet is None:
+            logger.error("SignalEmbedder not initialized, call init_all first")
+            return 1
+        # Grab latest samples
+        self.inlet.update()
+        if self.inlet.n_new == 0:
+            logger.debug("Skipping filtering because no new samples")
+            return 0
+
+        logger.debug(f"Filtering {self.inlet.n_new} new samples")
+        self.fb.filter(
+            # look back only new data
+            self.inlet.unfold_buffer()[-self.inlet.n_new:, :],
+            # and this is getting the times
+            self.inlet.unfold_buffer_t()[-self.inlet.n_new:],
+        )  # after this step, the buffer within fb has the filtered data
+        self.inlet.n_new = 0
+        return 0
+
+    def _project(self, x: NDArray):  # (batch_size, n_channel, n_times)
+        if self.outlet is None or self.model is None:
+            logger.error("SignalEmbedder not initialized, call init_all first")
+            return 1
+
+        if self.new_sfreq is not None:
+            logger.debug(f"Resampling to {self.new_sfreq} Hz")
+            new_n_times = int(self.input_window_seconds * self.new_sfreq)
+            x = resample(x, new_n_times, axis=-1)
+
+        logger.debug("Computing the embedding")
         y = self.model.transform(x)
         assert y.ndim == 2
-        assert y.shape[0] == 1
 
         # Push the embedding
-        self.outlet.push_sample(y[0])
+        for y_i in y:  # TODO: more efficient?
+            self.outlet.push_sample(y_i)
         return 0
 
     def _run_loop(self, stop_event: threading.Event):
@@ -187,7 +200,7 @@ class SignalEmbedder:
             return 1
         while not stop_event.is_set():
             t_start = pylsl.local_clock()
-            self.update()
+            self.update_latest()
             t_end = pylsl.local_clock()
 
             # reduce sleep by processing time
