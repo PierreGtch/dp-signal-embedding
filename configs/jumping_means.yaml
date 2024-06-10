@@ -17,3 +17,6 @@ signal_embedder:
   new_sfreq: 128
   band: [ 0.5, 40 ]
   t_sleep: 0.1
+  #  marker_stream_name: "MarkersStream"
+  #  markers: null
+  #  offset: 0.0

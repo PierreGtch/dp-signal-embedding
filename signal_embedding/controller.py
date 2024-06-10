@@ -1,8 +1,9 @@
 import threading
 
 import numpy as np
+from numpy.typing import NDArray
 import pylsl
-from scipy.signal import resample
+from mne.filter import resample
 
 from dareplane_utils.general.time import sleep_s
 from dareplane_utils.signal_processing.filtering import FilterBank
@@ -31,6 +32,14 @@ class SignalEmbedder:
         Band to filter the signal before passing it to the model.
     t_sleep: float
         Time to sleep between updates.
+    marker_stream_name: str | None
+        Optional name of the marker stream. If not None, the projections will be synchronised
+        with the markers.
+    markers: list[str]
+        List of markers to create projections for. If None, all markers are used.
+        Only used if marker_stream_name is not None.
+    offset: float
+        Offset of the epochs wrt the markers. Only used if marker_stream_name is not None.
     """
 
     def __init__(
@@ -42,6 +51,9 @@ class SignalEmbedder:
             new_sfreq: float | None = None,
             band: tuple[float, float] = (0.5, 40),
             t_sleep: float = 0.1,
+            marker_stream_name: str | None = None,
+            markers: list[str] | None = None,
+            offset: float = 0,
     ):
         self.model_getter = model_getter
         self.input_stream_name = input_stream_name
@@ -50,11 +62,15 @@ class SignalEmbedder:
         self.new_sfreq = new_sfreq
         self.band = band
         self.t_sleep = t_sleep
+        self.marker_stream_name = marker_stream_name
+        self.markers = markers
+        self.offset = offset
 
         self.model = None
-        self.inlet = None
+        self.data_sw = None
+        self.mrk_sw = None
         self.fb = None
-        self.outlet = None
+        self.emb_so = None
         self.signal_sfreq = None
         self.chs_info = None
 
@@ -64,7 +80,7 @@ class SignalEmbedder:
     @property
     def buffer_size_s(self):
         # we take a larger buffer for margin:
-        return 3 * max(self.input_window_seconds, self.t_sleep)
+        return 3 * (max(self.input_window_seconds, self.t_sleep) + abs(self.offset))
 
     @property
     def model_sfreq(self):
@@ -80,21 +96,31 @@ class SignalEmbedder:
         return y.shape[1]
 
     def set_signal_info(self):
-        self.signal_sfreq = self.inlet.inlet.info().nominal_srate()
+        self.signal_sfreq = self.data_sw.inlet.info().nominal_srate()
         self.chs_info = [
             dict(ch_name=ch_name, type="EEG")
-            for ch_name in self.inlet.channel_names
+            for ch_name in self.data_sw.channel_names
         ]
 
-    def connect_input_stream(self):
-        logger.info(f"Connecting to input stream {self.input_stream_name}")
-        self.inlet = StreamWatcher(
+    def connect_input_streams(self):
+        logger.info(f'Connecting to input stream "{self.input_stream_name}"')
+        self.data_sw = StreamWatcher(
             self.input_stream_name, buffer_size_s=self.buffer_size_s, logger=logger)
 
-        self.inlet.connect_to_stream()
+        self.data_sw.connect_to_stream()
 
         # set signal_sfreq and chs_info
         self.set_signal_info()
+
+        if self.marker_stream_name is None:
+            return 0
+
+        logger.info(f'Connecting to marker stream "{self.marker_stream_name}"')
+        self.mrk_sw = StreamWatcher(
+            self.marker_stream_name, buffer_size_s=self.buffer_size_s, logger=logger)
+        self.mrk_sw.connect_to_stream()
+        if len(self.mrk_sw.channel_names) != 1:
+            logger.error("The marker stream should have exactly one channel")
         return 0
 
     def create_model(self):
@@ -115,44 +141,35 @@ class SignalEmbedder:
         return 0
 
     def create_output_stream(self):
-        logger.info(f"Creating the output stream {self.output_stream_name}")
+        logger.info(f'Creating the output stream "{self.output_stream_name}"')
         info = pylsl.StreamInfo(
             self.output_stream_name, "MISC", channel_count=self.n_outputs,
             nominal_srate=pylsl.IRREGULAR_RATE, channel_format="float32",
             source_id="signal_embedding",  # TODO should it be more unique?
         )
-        self.outlet = pylsl.StreamOutlet(info)
+        self.emb_so = pylsl.StreamOutlet(info)
         return 0
 
     def init_all(self):
-        self.connect_input_stream()
+        self.connect_input_streams()
         self.create_model()
         self.create_output_stream()
         return 0
 
     def update(self):
         logger.debug(f"Start update")
-        if self.inlet is None or self.outlet is None or self.model is None:
-            logger.error("SignalEmbedder not initialized, call init_all first")
+        if self._filter():
             return 1
-        # Grab latest samples
-        self.inlet.update()
-        if self.inlet.n_new == 0:
-            logger.debug("Skipping filtering because no new samples")
-            return 0
+        if self.marker_stream_name is None:
+            x = self._create_epoch_latest()
+        else:
+            x = self._create_epochs_markers()
+        if isinstance(x, int):
+            return x
+        return self._project(x)
 
-        logger.debug(f"Filtering {self.inlet.n_new} new samples")
-        # Filter the data
-        self.fb.filter(
-            # look back only new data
-            self.inlet.unfold_buffer()[-self.inlet.n_new:, :],
-            # and this is getting the times
-            self.inlet.unfold_buffer_t()[-self.inlet.n_new:],
-        )  # after this step, the buffer within fb has the filtered data
-        self.inlet.n_new = 0
-
-        # Most recent samples
-        logger.debug(f"Loading the latest samples")
+    def _create_epoch_latest(self) -> NDArray | int:
+        logger.debug(f"Loading the latest data samples")
         # FilterBank returns (n_times, n_channel, n_bands)
         x = self.fb.get_data()
         n_times = int(self.input_window_seconds * self.signal_sfreq)
@@ -160,29 +177,115 @@ class SignalEmbedder:
             logger.debug(
                 f"Skipping embedding because not enough samples in buffer ({x.shape[0]}/{n_times})")
             return 0
-        logger.debug(f"Embedding the {n_times} latest samples")
+
+        logger.debug(f"Creating one epoch from the {n_times} latest samples")
         x = x[-n_times:, :, 0]
-
-        # Resample if necessary
-        if self.new_sfreq is not None:
-            new_n_times = int(self.input_window_seconds * self.new_sfreq)
-            x = resample(x, new_n_times, axis=0)
-
         # Transpose and add batch dim
         x = x.T[None, :, :]  # (1, n_channel, n_times)
 
-        # Compute the embedding
-        y = self.model.transform(x)
-        assert y.ndim == 2
-        assert y.shape[0] == 1
+        return x
 
-        # Push the embedding
-        self.outlet.push_sample(y[0])
+    def _create_epochs_markers(self) -> NDArray | int:
+        logger.debug(f"Loading latest markers")
+        self.mrk_sw.update()
+        if self.mrk_sw.n_new == 0:
+            logger.debug("Skipping epoching because no new markers")
+            return 0
+        markers = self.mrk_sw.unfold_buffer()[-self.mrk_sw.n_new:, 0]  # assumes only one channel
+        # starts or the epochs in seconds:
+        markers_t = self.mrk_sw.unfold_buffer_t()[-self.mrk_sw.n_new:] + self.offset
+        # mask for desired markers:
+        if self.markers is None:
+            desired = np.ones_like(markers, dtype=bool)
+        else:
+            desired = np.isin(markers, self.markers)
+        if desired.sum() == 0:
+            logger.debug("No new markers")
+            return 0
+
+        logger.debug(f"Loading the latest data time stamps")
+        t = self.fb.ring_buffer.unfold_buffer_t()[-self.fb.n_new:]
+        starts = np.abs(markers_t[:, None] - t).argmin(axis=1)
+
+        # compute masks
+        n_times = int(self.input_window_seconds * self.signal_sfreq)
+        missed = starts == 0
+        to_wait = starts + n_times > len(t)
+        to_process = ~missed & ~to_wait
+        n_missed = missed.sum()
+        n_to_wait = to_wait.sum()
+        n_to_process = to_process[desired].sum()
+        self.mrk_sw.n_new = n_to_wait
+
+        if n_missed > 0:
+            logger.error(f"{n_missed} events could not be embedded "
+                         f"because t_sleep or processing time too long.")
+        if missed[n_missed:].any() or to_wait[:-n_to_wait].any():
+            logger.error("Shuffled time stamps found in the markers stream. "
+                         "This case is not handled.")
+        if n_to_process == 0:
+            logger.debug("No events can be epoched")
+            return 0
+
+        logger.debug(f"Loading the latest data samples")
+        x = self.fb.get_data()[:, :, 0]
+        assert len(t) == x.shape[0]
+        logger.debug(
+            f"Epoching {n_to_process} events ({markers[desired & to_process]}) "
+            f"of {n_times} samples each")
+        x = np.stack([
+            x[start: start + n_times, :].T
+            for start in starts[desired & to_process]
+        ], axis=0, dtype=np.float32)
+        return x
+
+    def _filter(self):
+        if self.data_sw is None:
+            logger.error("SignalEmbedder not initialized, call init_all first")
+            return 1
+        # Grab latest samples
+        self.data_sw.update()
+        if self.data_sw.n_new == 0:
+            logger.debug("Skipping filtering because no new samples")
+            return 0
+
+        logger.debug(f"Filtering {self.data_sw.n_new} new samples")
+        self.fb.filter(
+            # look back only new data
+            self.data_sw.unfold_buffer()[-self.data_sw.n_new:, :],
+            # and this is getting the times
+            self.data_sw.unfold_buffer_t()[-self.data_sw.n_new:],
+        )  # after this step, the buffer within fb has the filtered data
+        self.data_sw.n_new = 0
+        return 0
+
+    def _project(self, x: NDArray):  # (batch_size, n_channel, n_times)
+        if self.emb_so is None or self.model is None:
+            logger.error("SignalEmbedder not initialized, call init_all first")
+            return 1
+        if np.isnan(x).sum() > 0:
+            logger.error("NaNs found after epoching")
+
+        if self.new_sfreq is not None:
+            logger.debug(f"Resampling to {self.new_sfreq} Hz")
+            up = self.signal_sfreq / self.new_sfreq
+            x = resample(x.astype("float64"), up=up, axis=-1).astype("float32")
+            if np.isnan(x).sum() > 0:
+                logger.error("NaNs found after resampling")
+
+        logger.debug(f"Computing {x.shape[0]} embedding(s)")
+        y = self.model.transform(x)
+        if np.isnan(y).sum() > 0:
+            logger.error("NaNs found after embedding")
+        assert y.ndim == 2
+
+        logger.debug(f"Pushing {y.shape[0]} embedding(s)")
+        self.emb_so.push_chunk(y)
         return 0
 
     def _run_loop(self, stop_event: threading.Event):
         logger.debug("Starting the run loop")
-        if self.inlet is None or self.outlet is None or self.model is None:
+        if self.data_sw is None or self.emb_so is None or self.model is None:
             logger.error("SignalEmbedder not initialized, call init_all first")
             return 1
         while not stop_event.is_set():
