@@ -17,7 +17,7 @@ def mockup_stream(stop_event):
         data = np.random.randn(
             10,
             3,
-        )
+        ).astype(np.float32)
         outlet.push_chunk(data)
         sleep_s(.1)
     return 0
