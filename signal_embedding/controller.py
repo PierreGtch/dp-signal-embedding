@@ -36,7 +36,8 @@ class SignalEmbedder:
         Optional name of the marker stream. If not None, the projections will be synchronised
         with the markers.
     markers: list[str]
-        List of markers to create projections for. Only used if marker_stream_name is not None.
+        List of markers to create projections for. If None, all markers are used.
+        Only used if marker_stream_name is not None.
     offset: float
         Offset of the epochs wrt the markers. Only used if marker_stream_name is not None.
     """
@@ -189,7 +190,10 @@ class SignalEmbedder:
         # starts or the epochs in seconds:
         markers_t = self.mrk_sw.unfold_buffer_t()[-self.mrk_sw.n_new:] + self.offset
         # mask for desired markers:
-        desired = np.isin(markers, self.markers)
+        if self.markers is None:
+            desired = np.ones_like(markers, dtype=bool)
+        else:
+            desired = np.isin(markers, self.markers)
         if desired.sum() == 0:
             logger.debug("No new markers")
             return 0
