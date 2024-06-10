@@ -20,9 +20,9 @@ if __name__ == "__main__":
     cli = ArgumentParser(default_config_files=[config_dir / config_file])
     cli.add_argument("--signal_embedder", type=SignalEmbedder)
     cli.add_argument("--markers", action="store_true", default=False)
-    # args = cli.parse_args()
-    args = cli.parse_args(["--signal_embedder.init_args.marker_stream_name=MarkersStream",
-                           "--markers", ])
+    args = cli.parse_args()
+    # args = cli.parse_args(["--signal_embedder.init_args.marker_stream_name=MarkersStream",
+    #                        "--markers", ])
     args = cli.instantiate_classes(args)
     embedder = args.signal_embedder
     markers = args.markers
