@@ -185,6 +185,7 @@ class SignalEmbedder:
             return 1
 
         logger.debug(f"Loading latest markers")
+        self.mrk_inlet.update()
         new_markers = self.mrk_inlet.unfold_buffer()[-self.mrk_inlet.n_new:]  # TODO check dim
         new_mask = [marker in self.markers for marker in new_markers]
         new_events_present = any(new_mask)
