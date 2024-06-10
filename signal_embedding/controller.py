@@ -66,10 +66,10 @@ class SignalEmbedder:
         self.offset = offset
 
         self.model = None
-        self.inlet = None
-        self.mrk_inlet = None
+        self.data_sw = None
+        self.mrk_sw = None
         self.fb = None
-        self.outlet = None
+        self.emb_so = None
         self.signal_sfreq = None
         self.chs_info = None
         self.events_waitlist = None
@@ -96,18 +96,18 @@ class SignalEmbedder:
         return y.shape[1]
 
     def set_signal_info(self):
-        self.signal_sfreq = self.inlet.inlet.info().nominal_srate()
+        self.signal_sfreq = self.data_sw.inlet.info().nominal_srate()
         self.chs_info = [
             dict(ch_name=ch_name, type="EEG")
-            for ch_name in self.inlet.channel_names
+            for ch_name in self.data_sw.channel_names
         ]
 
     def connect_input_streams(self):
         logger.info(f"Connecting to input stream {self.input_stream_name}")
-        self.inlet = StreamWatcher(
+        self.data_sw = StreamWatcher(
             self.input_stream_name, buffer_size_s=self.buffer_size_s, logger=logger)
 
-        self.inlet.connect_to_stream()
+        self.data_sw.connect_to_stream()
 
         # set signal_sfreq and chs_info
         self.set_signal_info()
@@ -116,9 +116,9 @@ class SignalEmbedder:
             return 0
 
         logger.info(f"Connecting to marker stream {self.marker_stream_name}")
-        self.mrk_inlet = StreamWatcher(
+        self.mrk_sw = StreamWatcher(
             self.marker_stream_name, buffer_size_s=self.buffer_size_s, logger=logger)
-        self.mrk_inlet.connect_to_stream()
+        self.mrk_sw.connect_to_stream()
         self.events_waitlist = []  # events that could not be epoched because not enough signal
         return 0
 
@@ -146,7 +146,7 @@ class SignalEmbedder:
             nominal_srate=pylsl.IRREGULAR_RATE, channel_format="float32",
             source_id="signal_embedding",  # TODO should it be more unique?
         )
-        self.outlet = pylsl.StreamOutlet(info)
+        self.emb_so = pylsl.StreamOutlet(info)
         return 0
 
     def init_all(self):
@@ -185,8 +185,6 @@ class SignalEmbedder:
             return 1
 
         logger.debug(f"Loading latest markers")
-        self.mrk_inlet.update()
-        new_markers = self.mrk_inlet.unfold_buffer()[-self.mrk_inlet.n_new:]  # TODO check dim
         self.mrk_sw.update()
         new_markers = self.mrk_sw.unfold_buffer()[-self.mrk_sw.n_new:]  # TODO check dim
         new_mask = [marker in self.markers for marker in new_markers]
@@ -238,7 +236,7 @@ class SignalEmbedder:
         logger.debug(f"Filtering {self.data_sw.n_new} new samples")
         self.fb.filter(
             # look back only new data
-            self.inlet.unfold_buffer()[-self.inlet.n_new:, :],
+            self.data_sw.unfold_buffer()[-self.data_sw.n_new:, :],
             # and this is getting the times
             self.data_sw.unfold_buffer_t()[-self.data_sw.n_new:],
         )  # after this step, the buffer within fb has the filtered data
