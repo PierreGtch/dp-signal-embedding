@@ -188,6 +188,9 @@ class SignalEmbedder:
     def _create_epochs_markers(self) -> NDArray | int:
         logger.debug(f"Loading latest markers")
         self.mrk_sw.update()
+        if self.mrk_sw.n_new == 0:
+            logger.debug("Skipping epoching because no new markers")
+            return 0
         markers = self.mrk_sw.unfold_buffer()[-self.mrk_sw.n_new:, 0]  # assumes only one channel
         # starts or the epochs in seconds:
         markers_t = self.mrk_sw.unfold_buffer_t()[-self.mrk_sw.n_new:] + self.offset
@@ -226,6 +229,7 @@ class SignalEmbedder:
 
         logger.debug(f"Loading the latest data samples")
         x = self.fb.get_data()[:, :, 0]
+        assert len(t) == x.shape[0]
         logger.debug(
             f"Epoching {n_to_process} events ({markers[desired & to_process]}) "
             f"of {n_times} samples each")
