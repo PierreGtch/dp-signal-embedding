@@ -225,8 +225,10 @@ class SignalEmbedder:
             return 0
 
         logger.debug(f"Loading the latest data samples")
-        x = self.fb.get_data()
-        logger.debug(f"Epoching {n_to_process} events of {n_times} samples each")
+        x = self.fb.get_data()[:, :, 0]
+        logger.debug(
+            f"Epoching {n_to_process} events ({markers[desired & to_process]}) "
+            f"of {n_times} samples each")
         x = np.stack([
             x[start: start + n_times, :].T
             for start in starts[desired & to_process]
