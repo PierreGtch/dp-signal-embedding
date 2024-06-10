@@ -119,6 +119,8 @@ class SignalEmbedder:
         self.mrk_sw = StreamWatcher(
             self.marker_stream_name, buffer_size_s=self.buffer_size_s, logger=logger)
         self.mrk_sw.connect_to_stream()
+        if len(self.mrk_sw.channel_names) != 1:
+            logger.error("The marker stream should have exactly one channel")
         return 0
 
     def create_model(self):
@@ -186,7 +188,7 @@ class SignalEmbedder:
     def _create_epochs_markers(self) -> NDArray | int:
         logger.debug(f"Loading latest markers")
         self.mrk_sw.update()
-        markers = self.mrk_sw.unfold_buffer()[-self.mrk_sw.n_new:]
+        markers = self.mrk_sw.unfold_buffer()[-self.mrk_sw.n_new:, 0]  # assumes only one channel
         # starts or the epochs in seconds:
         markers_t = self.mrk_sw.unfold_buffer_t()[-self.mrk_sw.n_new:] + self.offset
         # mask for desired markers:
