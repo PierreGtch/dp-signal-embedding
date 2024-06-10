@@ -231,13 +231,13 @@ tests = ["pytest", "pytest-cov", "pytest-xdist"]
 
 [[package]]
 name = "dareplane-utils"
-version = "0.0.7"
+version = "0.0.8"
 description = "Default utilities for the dareplane platform"
 optional = false
 python-versions = ">=3.10"
 files = [
-    {file = "dareplane_utils-0.0.7-py3-none-any.whl", hash = "sha256:47d00d4f21432db0562d4361d23c5a8aa09ce4aab49667c8479f0dd6c049698e"},
-    {file = "dareplane_utils-0.0.7.tar.gz", hash = "sha256:c7d76ad5f73169369a97056b7db68f6a90ca2f6e06cd60d7f22789a0b05e27b1"},
+    {file = "dareplane_utils-0.0.8-py3-none-any.whl", hash = "sha256:c3dacb88c45ec9c35197e733d01a58474c6b64c4c815bc1b835837684f602cb6"},
+    {file = "dareplane_utils-0.0.8.tar.gz", hash = "sha256:81638d024d60ce43156ba9c531db7262cae308627def0955d2f309da19029366"},
 ]
 
 [[package]]
@@ -1806,4 +1806,4 @@ zstd = ["zstandard (>=0.18.0)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.13"
-content-hash = "a47491a039be6ba59e1552abf17142eb5825b5d5af0a6f830a38c3f089c255d8"
+content-hash = "2923f765ff177c48e4082bdb60ca2348a6295cc9259fffe72c9de92b4f5d8845"
