@@ -187,6 +187,8 @@ class SignalEmbedder:
         logger.debug(f"Loading latest markers")
         self.mrk_inlet.update()
         new_markers = self.mrk_inlet.unfold_buffer()[-self.mrk_inlet.n_new:]  # TODO check dim
+        self.mrk_sw.update()
+        new_markers = self.mrk_sw.unfold_buffer()[-self.mrk_sw.n_new:]  # TODO check dim
         new_mask = [marker in self.markers for marker in new_markers]
         new_events_present = any(new_mask)
         if not new_events_present and len(self.events_waitlist) == 0:
@@ -195,10 +197,10 @@ class SignalEmbedder:
 
         # retrieve the new events since last update
         new_events = (
-            (self.mrk_inlet.unfold_buffer_t()[-self.mrk_inlet.n_new:] + self.offset)[new_mask]
+            (self.mrk_sw.unfold_buffer_t()[-self.mrk_sw.n_new:] + self.offset)[new_mask]
             if new_events_present else []
         )
-        self.mrk_inlet.n_new = 0
+        self.mrk_sw.n_new = 0
         events_waitlist = np.concatenate([self.events_waitlist + new_events])
 
         # find which events should wait and which can be processed
@@ -224,27 +226,27 @@ class SignalEmbedder:
         return self._project(x)
 
     def _filter(self):
-        if self.inlet is None:
+        if self.data_sw is None:
             logger.error("SignalEmbedder not initialized, call init_all first")
             return 1
         # Grab latest samples
-        self.inlet.update()
-        if self.inlet.n_new == 0:
+        self.data_sw.update()
+        if self.data_sw.n_new == 0:
             logger.debug("Skipping filtering because no new samples")
             return 0
 
-        logger.debug(f"Filtering {self.inlet.n_new} new samples")
+        logger.debug(f"Filtering {self.data_sw.n_new} new samples")
         self.fb.filter(
             # look back only new data
             self.inlet.unfold_buffer()[-self.inlet.n_new:, :],
             # and this is getting the times
-            self.inlet.unfold_buffer_t()[-self.inlet.n_new:],
+            self.data_sw.unfold_buffer_t()[-self.data_sw.n_new:],
         )  # after this step, the buffer within fb has the filtered data
-        self.inlet.n_new = 0
+        self.data_sw.n_new = 0
         return 0
 
     def _project(self, x: NDArray):  # (batch_size, n_channel, n_times)
-        if self.outlet is None or self.model is None:
+        if self.emb_so is None or self.model is None:
             logger.error("SignalEmbedder not initialized, call init_all first")
             return 1
 
@@ -258,12 +260,12 @@ class SignalEmbedder:
         assert y.ndim == 2
 
         # Push the embedding
-        self.outlet.push_chunk(y)
+        self.emb_so.push_chunk(y)
         return 0
 
     def _run_loop(self, stop_event: threading.Event):
         logger.debug("Starting the run loop")
-        if self.inlet is None or self.outlet is None or self.model is None:
+        if self.data_sw is None or self.emb_so is None or self.model is None:
             logger.error("SignalEmbedder not initialized, call init_all first")
             return 1
         while not stop_event.is_set():
