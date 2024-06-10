@@ -32,6 +32,13 @@ class SignalEmbedder:
         Band to filter the signal before passing it to the model.
     t_sleep: float
         Time to sleep between updates.
+    marker_stream_name: str | None
+        Optional name of the marker stream. If not None, the projections will be synchronised
+        with the markers.
+    markers: list[str]
+        List of markers to create projections for. Only used if marker_stream_name is not None.
+    offset: float
+        Offset of the epochs wrt the markers. Only used if marker_stream_name is not None.
     """
 
     def __init__(
@@ -43,6 +50,9 @@ class SignalEmbedder:
             new_sfreq: float | None = None,
             band: tuple[float, float] = (0.5, 40),
             t_sleep: float = 0.1,
+            marker_stream_name: str | None = None,
+            markers: list[str] | None = None,
+            offset: float = 0,
     ):
         self.model_getter = model_getter
         self.input_stream_name = input_stream_name
@@ -51,13 +61,18 @@ class SignalEmbedder:
         self.new_sfreq = new_sfreq
         self.band = band
         self.t_sleep = t_sleep
+        self.marker_stream_name = marker_stream_name
+        self.markers = markers
+        self.offset = offset
 
         self.model = None
         self.inlet = None
+        self.mrk_inlet = None
         self.fb = None
         self.outlet = None
         self.signal_sfreq = None
         self.chs_info = None
+        self.events_waitlist = None
 
     def get_self(self):
         return self
@@ -65,7 +80,7 @@ class SignalEmbedder:
     @property
     def buffer_size_s(self):
         # we take a larger buffer for margin:
-        return 3 * max(self.input_window_seconds, self.t_sleep)
+        return 3 * (max(self.input_window_seconds, self.t_sleep) + abs(self.offset))
 
     @property
     def model_sfreq(self):
@@ -87,7 +102,7 @@ class SignalEmbedder:
             for ch_name in self.inlet.channel_names
         ]
 
-    def connect_input_stream(self):
+    def connect_input_streams(self):
         logger.info(f"Connecting to input stream {self.input_stream_name}")
         self.inlet = StreamWatcher(
             self.input_stream_name, buffer_size_s=self.buffer_size_s, logger=logger)
@@ -96,6 +111,15 @@ class SignalEmbedder:
 
         # set signal_sfreq and chs_info
         self.set_signal_info()
+
+        if self.marker_stream_name is None:
+            return 0
+
+        logger.info(f"Connecting to marker stream {self.marker_stream_name}")
+        self.mrk_inlet = StreamWatcher(
+            self.marker_stream_name, buffer_size_s=self.buffer_size_s, logger=logger)
+        self.mrk_inlet.connect_to_stream()
+        self.events_waitlist = []  # events that could not be epoched because not enough signal
         return 0
 
     def create_model(self):
@@ -126,7 +150,7 @@ class SignalEmbedder:
         return 0
 
     def init_all(self):
-        self.connect_input_stream()
+        self.connect_input_streams()
         self.create_model()
         self.create_output_stream()
         return 0
@@ -140,7 +164,7 @@ class SignalEmbedder:
         # Most recent samples
         logger.debug(f"Loading the latest samples")
         # FilterBank returns (n_times, n_channel, n_bands)
-        x = self.fb.get_data()
+        x = self.fb.get_data()  # TODO: check if this is only returning the new data or the whole buffer
         n_times = int(self.input_window_seconds * self.signal_sfreq)
         if x.shape[0] < n_times:
             logger.debug(
@@ -151,6 +175,50 @@ class SignalEmbedder:
 
         # Transpose and add batch dim
         x = x.T[None, :, :]  # (1, n_channel, n_times)
+
+        return self._project(x)
+
+    def update_marker(self):
+        logger.debug(f"Start update marker")
+
+        if self._filter():
+            return 1
+
+        logger.debug(f"Loading latest markers")
+        new_markers = self.mrk_inlet.unfold_buffer()[-self.mrk_inlet.n_new:]  # TODO check dim
+        new_mask = [marker in self.markers for marker in new_markers]
+        new_events_present = any(new_mask)
+        if not new_events_present and len(self.events_waitlist) == 0:
+            logger.debug("No new markers")
+            return 0
+
+        # retrieve the new events since last update
+        new_events = (
+            (self.mrk_inlet.unfold_buffer_t()[-self.mrk_inlet.n_new:] + self.offset)[new_mask]
+            if new_events_present else []
+        )
+        self.mrk_inlet.n_new = 0
+        events_waitlist = np.concatenate([self.events_waitlist + new_events])
+
+        # find which events should wait and which can be processed
+        n_times = int(self.input_window_seconds * self.signal_sfreq)
+        t = self.fb.ring_buffer.unfold_buffer_t()[-self.fb.n_new:]
+        starts = np.abs(events_waitlist[:, None] - t).argmin(axis=1)
+        n_0 = len(starts == 0)
+        if n_0 > 0:
+            logger.error(
+                f"{n_0} events could not be embedded because t_sleep or processing time too long."
+            )
+        go_mask = (starts + n_times < len(t)) & (starts > 0)  # assumes t is sorted
+        self.events_waitlist = events_waitlist[~go_mask]
+        starts = starts[go_mask]
+        if len(starts) == 0:
+            logger.debug("No events can be epoched")
+            return 0
+
+        logger.debug(f"Epoching {len(starts)} events")
+        x = self.fb.get_data()
+        x = np.stack([x[start: start + n_times, :].T for start in starts], axis=0)
 
         return self._project(x)
 
@@ -200,7 +268,10 @@ class SignalEmbedder:
             return 1
         while not stop_event.is_set():
             t_start = pylsl.local_clock()
-            self.update_latest()
+            if self.marker_stream_name is None:
+                self.update_latest()
+            else:
+                self.update_marker()
             t_end = pylsl.local_clock()
 
             # reduce sleep by processing time
