@@ -154,7 +154,7 @@ class SignalEmbedder:
         return 0
 
     def update(self):
-        logger.debug(f"Start update latest")
+        logger.debug(f"Start update")
         if self._filter():
             return 1
         if self.marker_stream_name is None:
@@ -166,8 +166,7 @@ class SignalEmbedder:
         return self._project(x)
 
     def _create_epoch_latest(self) -> NDArray | int:
-        # Most recent samples
-        logger.debug(f"Loading the latest samples")
+        logger.debug(f"Loading the latest data samples")
         # FilterBank returns (n_times, n_channel, n_bands)
         x = self.fb.get_data()
         n_times = int(self.input_window_seconds * self.signal_sfreq)
@@ -175,9 +174,9 @@ class SignalEmbedder:
             logger.debug(
                 f"Skipping embedding because not enough samples in buffer ({x.shape[0]}/{n_times})")
             return 0
-        logger.debug(f"Selecting the {n_times} latest samples")
-        x = x[-n_times:, :, 0]
 
+        logger.debug(f"Creating one epoch from the {n_times} latest samples")
+        x = x[-n_times:, :, 0]
         # Transpose and add batch dim
         x = x.T[None, :, :]  # (1, n_channel, n_times)
 
@@ -189,17 +188,18 @@ class SignalEmbedder:
         markers = self.mrk_sw.unfold_buffer()[-self.mrk_sw.n_new:]
         # starts or the epochs in seconds:
         markers_t = self.mrk_sw.unfold_buffer_t()[-self.mrk_sw.n_new:] + self.offset
-        # filter only desired markers:
+        # mask for desired markers:
         desired = np.isin(markers, self.markers)
         if desired.sum() == 0:
             logger.debug("No new markers")
             return 0
 
+        logger.debug(f"Loading the latest data time stamps")
         t = self.fb.ring_buffer.unfold_buffer_t()[-self.fb.n_new:]
         starts = np.abs(markers_t[:, None] - t).argmin(axis=1)
 
+        # compute masks
         n_times = int(self.input_window_seconds * self.signal_sfreq)
-
         missed = starts == 0
         to_wait = starts + n_times > len(t)
         to_process = ~missed & ~to_wait
@@ -207,6 +207,7 @@ class SignalEmbedder:
         n_to_wait = to_wait.sum()
         n_to_process = to_process[desired].sum()
         self.mrk_sw.n_new = n_to_wait
+
         if n_missed > 0:
             logger.error(f"{n_missed} events could not be embedded "
                          f"because t_sleep or processing time too long.")
@@ -217,8 +218,9 @@ class SignalEmbedder:
             logger.debug("No events can be epoched")
             return 0
 
-        logger.debug(f"Epoching {n_to_process} events")
+        logger.debug(f"Loading the latest data samples")
         x = self.fb.get_data()
+        logger.debug(f"Epoching {n_to_process} events of {n_times} samples each")
         x = np.stack([
             x[start: start + n_times, :].T
             for start in starts[desired & to_process]
@@ -255,11 +257,11 @@ class SignalEmbedder:
             new_n_times = int(self.input_window_seconds * self.new_sfreq)
             x = resample(x, new_n_times, axis=-1)
 
-        logger.debug("Computing the embedding")
+        logger.debug(f"Computing {x.shape[0]} embedding(s)")
         y = self.model.transform(x)
         assert y.ndim == 2
 
-        # Push the embedding
+        logger.debug(f"Pushing {y.shape[0]} embedding(s)")
         self.emb_so.push_chunk(y)
         return 0
 
