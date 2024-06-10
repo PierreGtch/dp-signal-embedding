@@ -257,8 +257,7 @@ class SignalEmbedder:
         assert y.ndim == 2
 
         # Push the embedding
-        for y_i in y:  # TODO: more efficient?
-            self.outlet.push_sample(y_i)
+        self.outlet.push_chunk(y)
         return 0
 
     def _run_loop(self, stop_event: threading.Event):
