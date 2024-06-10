@@ -9,7 +9,7 @@ packages = [{ include = "signal_embedding" }]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
-dareplane-utils = "^0.0.7"
+dareplane-utils = "^0.0.8"
 jsonargparse = "^4.29.0"
 numpy = "^1.26.4"
 pylsl = "^1.16.2"

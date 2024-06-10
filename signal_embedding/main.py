@@ -5,8 +5,8 @@ from jsonargparse import ArgumentParser
 from signal_embedding.controller import SignalEmbedder
 
 config_dir = (Path(__file__).parent / "../configs").resolve()
-# config_file = "skorch_nn_Lee2019_MI.yaml"
-config_file = "jumping_means.yaml"
+# default_config_file = "skorch_nn_Lee2019_MI.yaml"
+default_config_file = "jumping_means.yaml"
 
 if __name__ == "__main__":
     import threading
@@ -16,14 +16,13 @@ if __name__ == "__main__":
 
     logger.setLevel("DEBUG")
 
-    # cli = cli_signal_embedding()
-    cli = ArgumentParser(default_config_files=[config_dir / config_file])
-    cli.add_argument("--signal_embedder", type=SignalEmbedder)
-    cli.add_argument("--markers", action="store_true", default=False)
-    args = cli.parse_args()
-    # args = cli.parse_args(["--signal_embedder.init_args.marker_stream_name=MarkersStream",
+    parser = ArgumentParser(default_config_files=[config_dir / default_config_file])
+    parser.add_argument("--signal_embedder", type=SignalEmbedder)
+    parser.add_argument("--markers", action="store_true", default=False)
+    args = parser.parse_args()
+    # args = parser.parse_args(["--signal_embedder.init_args.marker_stream_name=MarkersStream",
     #                        "--markers", ])
-    args = cli.instantiate_classes(args)
+    args = parser.instantiate_classes(args)
     embedder = args.signal_embedder
     markers = args.markers
 
