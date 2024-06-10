@@ -72,7 +72,6 @@ class SignalEmbedder:
         self.emb_so = None
         self.signal_sfreq = None
         self.chs_info = None
-        self.events_waitlist = None
 
     def get_self(self):
         return self
@@ -119,7 +118,6 @@ class SignalEmbedder:
         self.mrk_sw = StreamWatcher(
             self.marker_stream_name, buffer_size_s=self.buffer_size_s, logger=logger)
         self.mrk_sw.connect_to_stream()
-        self.events_waitlist = []  # events that could not be epoched because not enough signal
         return 0
 
     def create_model(self):
@@ -188,40 +186,43 @@ class SignalEmbedder:
     def _create_epochs_markers(self) -> NDArray | int:
         logger.debug(f"Loading latest markers")
         self.mrk_sw.update()
-        new_markers = self.mrk_sw.unfold_buffer()[-self.mrk_sw.n_new:]  # TODO check dim
-        new_mask = [marker in self.markers for marker in new_markers]
-        new_events_present = any(new_mask)
-        if not new_events_present and len(self.events_waitlist) == 0:
+        markers = self.mrk_sw.unfold_buffer()[-self.mrk_sw.n_new:]
+        # starts or the epochs in seconds:
+        markers_t = self.mrk_sw.unfold_buffer_t()[-self.mrk_sw.n_new:] + self.offset
+        # filter only desired markers:
+        desired = np.isin(markers, self.markers)
+        if desired.sum() == 0:
             logger.debug("No new markers")
             return 0
 
-        # retrieve the new events since last update
-        new_events = (
-            (self.mrk_sw.unfold_buffer_t()[-self.mrk_sw.n_new:] + self.offset)[new_mask]
-            if new_events_present else []
-        )
-        self.mrk_sw.n_new = 0
-        events_waitlist = np.concatenate([self.events_waitlist + new_events])
-
-        # find which events should wait and which can be processed
-        n_times = int(self.input_window_seconds * self.signal_sfreq)
         t = self.fb.ring_buffer.unfold_buffer_t()[-self.fb.n_new:]
-        starts = np.abs(events_waitlist[:, None] - t).argmin(axis=1)
-        n_0 = len(starts == 0)
-        if n_0 > 0:
-            logger.error(
-                f"{n_0} events could not be embedded because t_sleep or processing time too long."
-            )
-        go_mask = (starts + n_times < len(t)) & (starts > 0)  # assumes t is sorted
-        self.events_waitlist = events_waitlist[~go_mask]
-        starts = starts[go_mask]
-        if len(starts) == 0:
+        starts = np.abs(markers_t[:, None] - t).argmin(axis=1)
+
+        n_times = int(self.input_window_seconds * self.signal_sfreq)
+
+        missed = starts == 0
+        to_wait = starts + n_times > len(t)
+        to_process = ~missed & ~to_wait
+        n_missed = missed.sum()
+        n_to_wait = to_wait.sum()
+        n_to_process = to_process[desired].sum()
+        self.mrk_sw.n_new = n_to_wait
+        if n_missed > 0:
+            logger.error(f"{n_missed} events could not be embedded "
+                         f"because t_sleep or processing time too long.")
+        if missed[n_missed:].any() or to_wait[:n_to_wait].any():
+            logger.error("Shuffled time stamps found in the markers stream. "
+                         "This case is not handled.")
+        if n_to_process == 0:
             logger.debug("No events can be epoched")
             return 0
 
-        logger.debug(f"Epoching {len(starts)} events")
+        logger.debug(f"Epoching {n_to_process} events")
         x = self.fb.get_data()
-        x = np.stack([x[start: start + n_times, :].T for start in starts], axis=0)
+        x = np.stack([
+            x[start: start + n_times, :].T
+            for start in starts[desired & to_process]
+        ], axis=0)
         return x
 
     def _filter(self):
