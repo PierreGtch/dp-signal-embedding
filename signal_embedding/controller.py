@@ -103,7 +103,7 @@ class SignalEmbedder:
         ]
 
     def connect_input_streams(self):
-        logger.info(f"Connecting to input stream {self.input_stream_name}")
+        logger.info(f'Connecting to input stream "{self.input_stream_name}"')
         self.data_sw = StreamWatcher(
             self.input_stream_name, buffer_size_s=self.buffer_size_s, logger=logger)
 
@@ -115,7 +115,7 @@ class SignalEmbedder:
         if self.marker_stream_name is None:
             return 0
 
-        logger.info(f"Connecting to marker stream {self.marker_stream_name}")
+        logger.info(f'Connecting to marker stream "{self.marker_stream_name}"')
         self.mrk_sw = StreamWatcher(
             self.marker_stream_name, buffer_size_s=self.buffer_size_s, logger=logger)
         self.mrk_sw.connect_to_stream()
@@ -141,7 +141,7 @@ class SignalEmbedder:
         return 0
 
     def create_output_stream(self):
-        logger.info(f"Creating the output stream {self.output_stream_name}")
+        logger.info(f'Creating the output stream "{self.output_stream_name}"')
         info = pylsl.StreamInfo(
             self.output_stream_name, "MISC", channel_count=self.n_outputs,
             nominal_srate=pylsl.IRREGULAR_RATE, channel_format="float32",
