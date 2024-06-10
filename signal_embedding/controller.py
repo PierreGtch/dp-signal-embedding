@@ -3,7 +3,7 @@ import threading
 import numpy as np
 from numpy.typing import NDArray
 import pylsl
-from scipy.signal import resample
+from mne.filter import resample
 
 from dareplane_utils.general.time import sleep_s
 from dareplane_utils.signal_processing.filtering import FilterBank
@@ -236,7 +236,7 @@ class SignalEmbedder:
         x = np.stack([
             x[start: start + n_times, :].T
             for start in starts[desired & to_process]
-        ], axis=0)
+        ], axis=0, dtype=np.float32)
         return x
 
     def _filter(self):
@@ -268,8 +268,8 @@ class SignalEmbedder:
 
         if self.new_sfreq is not None:
             logger.debug(f"Resampling to {self.new_sfreq} Hz")
-            new_n_times = int(self.input_window_seconds * self.new_sfreq)
-            x = resample(x, new_n_times, axis=-1)
+            up = self.signal_sfreq / self.new_sfreq
+            x = resample(x.astype("float64"), up=up, axis=-1).astype("float32")
             if np.isnan(x).sum() > 0:
                 logger.error("NaNs found after resampling")
 
