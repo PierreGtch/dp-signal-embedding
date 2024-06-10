@@ -171,7 +171,7 @@ class SignalEmbedder:
         # Most recent samples
         logger.debug(f"Loading the latest samples")
         # FilterBank returns (n_times, n_channel, n_bands)
-        x = self.fb.get_data()  # TODO: check if this is only returning the new data or the whole buffer
+        x = self.fb.get_data()
         n_times = int(self.input_window_seconds * self.signal_sfreq)
         if x.shape[0] < n_times:
             logger.debug(
