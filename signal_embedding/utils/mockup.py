@@ -30,12 +30,13 @@ def mockup_marker_stream(stop_event):
         type="Markers",
         channel_count=1,
         nominal_srate=pylsl.IRREGULAR_RATE,
-        channel_format="string",
+        channel_format=pylsl.cf_int32,
     )
     outlet = pylsl.StreamOutlet(info)
 
     while not stop_event.is_set():
-        mrk = "right_hand"
+        # mrk = "right_hand"
+        mrk = 1
         outlet.push_sample([mrk])
         sleep_s(.1)
     return 0
