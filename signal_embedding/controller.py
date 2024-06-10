@@ -217,7 +217,7 @@ class SignalEmbedder:
         if n_missed > 0:
             logger.error(f"{n_missed} events could not be embedded "
                          f"because t_sleep or processing time too long.")
-        if missed[n_missed:].any() or to_wait[:n_to_wait].any():
+        if missed[n_missed:].any() or to_wait[:-n_to_wait].any():
             logger.error("Shuffled time stamps found in the markers stream. "
                          "This case is not handled.")
         if n_to_process == 0:
