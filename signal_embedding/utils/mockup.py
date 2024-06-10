@@ -16,7 +16,7 @@ def mockup_stream(stop_event):
     while not stop_event.is_set():
         data = np.random.randn(
             10,
-            2,
+            3,
         )
         outlet.push_chunk(data)
         sleep_s(.1)
