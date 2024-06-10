@@ -155,12 +155,19 @@ class SignalEmbedder:
         self.create_output_stream()
         return 0
 
-    def update_latest(self):
+    def update(self):
         logger.debug(f"Start update latest")
-
         if self._filter():
             return 1
+        if self.marker_stream_name is None:
+            x = self._create_epoch_latest()
+        else:
+            x = self._create_epochs_markers()
+        if isinstance(x, int):
+            return x
+        return self._project(x)
 
+    def _create_epoch_latest(self) -> NDArray | int:
         # Most recent samples
         logger.debug(f"Loading the latest samples")
         # FilterBank returns (n_times, n_channel, n_bands)
@@ -176,14 +183,9 @@ class SignalEmbedder:
         # Transpose and add batch dim
         x = x.T[None, :, :]  # (1, n_channel, n_times)
 
-        return self._project(x)
+        return x
 
-    def update_marker(self):
-        logger.debug(f"Start update marker")
-
-        if self._filter():
-            return 1
-
+    def _create_epochs_markers(self) -> NDArray | int:
         logger.debug(f"Loading latest markers")
         self.mrk_sw.update()
         new_markers = self.mrk_sw.unfold_buffer()[-self.mrk_sw.n_new:]  # TODO check dim
@@ -220,8 +222,7 @@ class SignalEmbedder:
         logger.debug(f"Epoching {len(starts)} events")
         x = self.fb.get_data()
         x = np.stack([x[start: start + n_times, :].T for start in starts], axis=0)
-
-        return self._project(x)
+        return x
 
     def _filter(self):
         if self.data_sw is None:
@@ -268,10 +269,7 @@ class SignalEmbedder:
             return 1
         while not stop_event.is_set():
             t_start = pylsl.local_clock()
-            if self.marker_stream_name is None:
-                self.update_latest()
-            else:
-                self.update_marker()
+            self.update()
             t_end = pylsl.local_clock()
 
             # reduce sleep by processing time

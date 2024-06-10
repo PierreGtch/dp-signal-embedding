@@ -15,7 +15,7 @@ def main(signal_embedder: SignalEmbedder, port: int = 8080, ip: str = "127.0.0.1
     pcommand_map = {
         "RUN": signal_embedder.run,  # update at regular intervals
         # "STOP": controler.stop,  # stop updates -> command automatically created by dareplane-utils
-        "UPDATE_LATEST": signal_embedder.update_latest,  # update once only
+        "UPDATE": signal_embedder.update,  # update once only
         "INIT_ALL": signal_embedder.init_all,  # initialize the streams and the model
         "CONNECT_INPUT_STREAMS": signal_embedder.connect_input_streams,
         "CREATE_MODEL": signal_embedder.create_model,
