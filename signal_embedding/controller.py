@@ -259,14 +259,20 @@ class SignalEmbedder:
         if self.emb_so is None or self.model is None:
             logger.error("SignalEmbedder not initialized, call init_all first")
             return 1
+        if np.isnan(x).sum() > 0:
+            logger.error("NaNs found after epoching")
 
         if self.new_sfreq is not None:
             logger.debug(f"Resampling to {self.new_sfreq} Hz")
             new_n_times = int(self.input_window_seconds * self.new_sfreq)
             x = resample(x, new_n_times, axis=-1)
+            if np.isnan(x).sum() > 0:
+                logger.error("NaNs found after resampling")
 
         logger.debug(f"Computing {x.shape[0]} embedding(s)")
         y = self.model.transform(x)
+        if np.isnan(y).sum() > 0:
+            logger.error("NaNs found after embedding")
         assert y.ndim == 2
 
         logger.debug(f"Pushing {y.shape[0]} embedding(s)")
