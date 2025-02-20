@@ -1,15 +1,15 @@
 signal_embedder:
   model_getter:
-    class_path: signal_embedding.models.skorch_nn.SkorchTransformer
+    class_path: signal_embedding.models.covariance.CovarianceTransformer
     init_args:
-      hf_repo_id: 'PierreGtch/EEGNetv4'
-      hf_model_name: 'EEGNetv4_Lee2019_MI'
+      delays: 4
+      estimator: scm
   input_stream_name: "AODataStream"
   output_stream_name: "embedding"
   input_window_seconds: 3
   new_sfreq: 128
-  band: [ 0.5, 40 ]
-  t_sleep: 0.0
+  band: [ 8, 13 ]
+  t_sleep: 0.5
   #  marker_stream_name: "MarkersStream"
   #  markers: null
   #  offset: 0.0
