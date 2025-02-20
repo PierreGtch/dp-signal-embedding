@@ -1,6 +1,6 @@
 signal_embedder:
   model_getter:
-    class_path: signal_embedding.models.JumpingMeansTransformer
+    class_path: signal_embedding.models.jumping_means.JumpingMeansTransformer
     init_args:
       intervals_seconds:
         - [ 0.1, 0.2 ]

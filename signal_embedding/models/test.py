@@ -1,13 +1,16 @@
 import pytest
 import numpy as np
 
-from signal_embedding.models import SkorchTransformer, JumpingMeansTransformer
+from signal_embedding.models.skorch_nn import SkorchTransformer
+from signal_embedding.models.jumping_means import JumpingMeansTransformer
+from signal_embedding.models.covariance import CovarianceTransformer    
 
 
 @pytest.mark.parametrize(
     "model_getter", [
         SkorchTransformer(),
-        JumpingMeansTransformer(intervals_seconds=[(0, .1), (.1, .2), (.2, .3)])
+        JumpingMeansTransformer(intervals_seconds=[(0, .1), (.1, .2), (.2, .3)]),
+        CovarianceTransformer(delays=4, estimator="scm")
     ])
 def test_model_getter(model_getter):
     model = model_getter(
