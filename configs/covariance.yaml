@@ -1,0 +1,15 @@
+signal_embedder:
+  model_getter:
+    class_path: signal_embedding.models.covariance.CovarianceTransformer
+    init_args:
+      delays: 4
+      estimator: scm
+  input_stream_name: "AODataStream"
+  output_stream_name: "embedding"
+  input_window_seconds: 3
+  new_sfreq: 128
+  band: [ 8, 13 ]
+  t_sleep: 0.5
+  #  marker_stream_name: "MarkersStream"
+  #  markers: null
+  #  offset: 0.0

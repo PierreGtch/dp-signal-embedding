@@ -5,11 +5,16 @@ from sklearn.preprocessing import FunctionTransformer
 import pyriemann
 
 from signal_embedding.models.base import ModelGetter
-
+def format_output(X):
+    return X.astype("float32")
 
 @dataclass
 class CovarianceTransformer(ModelGetter):
-    delays: int = 10
+    """
+    Output shape: n * (n + 1) / 2
+    With n = n_channels * delays
+    """
+    delays: int = 4
     estimator: str = "scm"
 
     def __call__(
@@ -25,4 +30,5 @@ class CovarianceTransformer(ModelGetter):
             ),
             FunctionTransformer(pyriemann.utils.base.logm),
             FunctionTransformer(pyriemann.utils.tangentspace.upper),
+            FunctionTransformer(format_output),
         )
